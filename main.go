@@ -34,20 +34,6 @@ var products = []Product{
 		Description: "Explore the seven wonders of the world in VR"},
 }
 
-func main() {
-	r := mux.NewRouter()
-	
-	r.Handle("/", http.FileServer(http.Dir("./views/")))
-
-	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir("./static/"))))
-
-	r.Handle("/status", StatusHandler).Methods("GET")
-	r.Handle("/products", jwtMiddleware.Handler(ProductsHandler)).Methods("GET")
-	r.Handle("/products/{slug}/feedback", jwtMiddleware.Handler(AddFeedbackHandler)).Methods("POST")
-
-	http.ListenAndServe(":3000", handlers.LoggingHandler(os.Stdout, r))
-}
-
 var StatusHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("API is up and running"))
 })
@@ -85,6 +71,13 @@ var AddFeedbackHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Re
 
 var mySigningKey = []byte("secret")
 
+var jwtMiddleware = jwtmiddleware.New(jwtmiddleware.Options{
+	ValidationKeyGetter: func(token *jwt.Token) (interface{}, error) {
+		return mySigningKey, nil
+	},
+	SigningMethod: jwt.SigningMethodHS256,
+})
+
 var GetTokenHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	token := jwt.New(jwt.SigningMethodHS256)
 
@@ -98,9 +91,16 @@ var GetTokenHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Reque
 	w.Write([]byte(tokenString))
 })
 
-var jwtMiddleware = jwtmiddleware.New(jwtmiddleware.Options{
-	ValidationKeyGetter: func(token *jwt.Token) (interface{}, error) {
-		return mySigningKey, nil
-	},
-	SigningMethod: jwt.SigningMethodHS256,
-})
+func main() {
+	r := mux.NewRouter()
+	
+	r.Handle("/", http.FileServer(http.Dir("./views/")))
+	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir("./static/"))))
+
+	r.Handle("/status", StatusHandler).Methods("GET")
+	r.Handle("/get-token", GetTokenHandler).Methods("GET")
+	r.Handle("/products", jwtMiddleware.Handler(ProductsHandler)).Methods("GET")
+	r.Handle("/products/{slug}/feedback", jwtMiddleware.Handler(AddFeedbackHandler)).Methods("POST")
+
+	http.ListenAndServe(":3000", handlers.LoggingHandler(os.Stdout, r))
+}
